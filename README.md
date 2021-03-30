@@ -1,2 +1,3 @@
 # bhavcopy
-download bhav copy from nse
+download bhav copy from nse using python
+
