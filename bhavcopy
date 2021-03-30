@@ -1,0 +1,69 @@
+from datetime import datetime
+import os
+import pandas as pd
+import requests
+import zipfile
+from dateutil.relativedelta import relativedelta
+
+base = 'D:/whatass/'
+t = datetime.today().date()
+dmonth = {'01': 'JAN', '02': 'FEB', '03': 'MAR', '04': 'APR', '05': 'MAY', '06': 'JUN', '07': 'JUL', '08': 'AUG',
+          '09': 'SEP', '10': 'OCT', '11': 'NOV', '12': 'DEC'}
+# Before running this script , create a file called log.txt and write the date from which you want to download EOD data
+# Opening file named log.txt , which keeps track of the last downloaded date.
+ltdl = open(base + 'log.txt', 'r')
+lastdt = ltdl.read(10)
+ltdl.close()
+lastdt = datetime.strptime(lastdt, '%Y-%m-%d')
+diff, wr = t - lastdt.date(), ''
+
+for i in range(1, diff.days + 1):
+    nextdt = lastdt + relativedelta(days=1)
+    d, m, y = '%02d' % nextdt.day, '%02d' % nextdt.month, '%02d' % nextdt.year
+    if not os.path.isdir(base + y + '/' + dmonth[m]):
+        if not os.path.isdir(base + y):
+            os.mkdir(base + y)
+
+        os.mkdir(base + y + '/' + dmonth[m])
+    zpath = base + y + '/' + dmonth[m] + '/' + d + '.zip'
+
+    for i in range(3):
+        try:
+            a = requests.get(
+                'https://archives.nseindia.com/content/historical/EQUITIES/' + y + '/' + dmonth[m] + '/cm' + d +
+                dmonth[m] + y + 'bhav.csv.zip', timeout=10)
+
+            if a.status_code == 200:
+                dload = open(zpath, 'wb')
+                dload.write(a.content)
+                # dload.write(r.data)
+                dload.close()
+                z = zipfile.ZipFile(zpath, 'r')
+                z.extractall(base + y + '/' + dmonth[m] + '/')
+                z.close()
+                os.remove(zpath)
+                f = pd.read_csv(base + y + '/' + dmonth[m] + '/cm' + d + dmonth[m] + y + 'bhav.csv')
+                f = f.loc[f['SERIES'] == 'EQ']  # retaining only EQ rows and leaving out bonds,options etc
+                f = f.drop(['Unnamed: 13'], axis=1)
+                f.to_csv(base + y + '/' + dmonth[m] + '/cm' + d + dmonth[m] + y + 'bhav.csv', index=False)
+                print("done for date " + str(d) + dmonth[m] + y)
+                with open(base + 'log.txt', 'w') as g:
+                    g.write(str(lastdt))
+
+                lastdt = nextdt
+                break
+            else:
+                z = 1 / 0
+
+        except:
+            x = nextdt.weekday()
+            if x >= 5:
+                lastdt = nextdt
+                print("It is a weekend")
+                break
+            else:
+                print('some error retrying - ' + str(i))
+                if i > 1:
+                    print("Maybe it is a public holiday")
+                    lastdt = nextdt
+                    break
